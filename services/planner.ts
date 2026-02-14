@@ -1,93 +1,65 @@
 
 import { Outing, Venue, ItinerarySlot, Vibe, AlcoholPref, DietaryTag } from '../types';
-import { getAllVenues, getHaversineDistance, DEFAULT_LAT, DEFAULT_LNG } from './mockPlaces';
-import { getMockWeather } from './mockWeather';
+import { getHaversineDistance } from './mockPlaces';
+import { PlacesProvider } from './placesProvider';
 
 interface PlannerParams {
+  centerLat: number;
+  centerLng: number;
   date: string;
   vibe: Vibe;
   budget: number;
   alcoholPref: AlcoholPref;
   dietaryTags: DietaryTag[];
-  range: number;
+  rangeMiles: number;
   startTime: string;
-  lat?: number;
-  lng?: number;
+  weather: any;
   blockedIds?: string[];
 }
 
 const CATEGORIES_BY_SLOT = {
-  1: ['cafe', 'tea', 'juice', 'wine bar', 'cocktail bar'],
-  2: ['restaurant', 'museum', 'gallery', 'comedy', 'music', 'arcade', 'bowling'],
-  3: ['dessert', 'wine bar', 'cocktail bar', 'juice']
+  1: { google: ['cafe', 'bakery', 'coffee_shop', 'tea_house'], keywords: ['cafe', 'coffee', 'matcha'] },
+  2: { google: ['restaurant', 'bar'], keywords: ['dinner', 'bistro', 'eatery'] },
+  3: { google: ['dessert_shop', 'bar', 'movie_theater'], keywords: ['dessert', 'cocktails', 'wine bar', 'ice cream'] }
 };
 
-export const planOuting = (params: PlannerParams): { weather: any, slots: ItinerarySlot[] } => {
-  const allVenues = getAllVenues();
-  const weather = getMockWeather(params.date);
-  const centerLat = params.lat || DEFAULT_LAT;
-  const centerLng = params.lng || DEFAULT_LNG;
-  
-  const blocked = new Set(params.blockedIds || []);
-
-  const scoreVenue = (venue: Venue, slotIdx: number, prevLat?: number, prevLng?: number): number => {
-    if (blocked.has(venue.id)) return -1000;
-
-    let score = 0;
-    
-    // 1. Basic Eligibility (Category)
-    const validCats = (CATEGORIES_BY_SLOT as any)[slotIdx];
-    if (!venue.categories.some(c => validCats.includes(c))) return -500;
-
-    // 2. Alcohol Preference
-    if (params.alcoholPref === AlcoholPref.NONE && venue.alcoholType === 'bar') return -500;
-    if (params.alcoholPref === AlcoholPref.PREFERRED && venue.alcoholType === 'bar') score += 30;
-
-    // 3. Dietary Support
-    const missingDiet = params.dietaryTags.filter(tag => !venue.dietarySupport.includes(tag));
-    score -= (missingDiet.length * 60);
-
-    // 4. Budget Match (Strong weighting)
-    const budgetDiff = Math.abs(venue.priceLevel - params.budget);
-    score -= (budgetDiff * 50);
-
-    // 5. Distance (Strong weighting)
-    const distFromCenter = getHaversineDistance(centerLat, centerLng, venue.lat, venue.lng);
-    if (distFromCenter > params.range) return -200;
-    score += (params.range - distFromCenter) * 10; 
-
-    if (prevLat && prevLng) {
-      const stepDist = getHaversineDistance(prevLat, prevLng, venue.lat, venue.lng);
-      score -= (stepDist * 30); // Heavy penalty for large jumps between stops
-    }
-
-    // 6. Quality
-    score += (venue.rating * 15);
-    score += (Math.log10(venue.reviewCount || 1) * 5);
-
-    // 7. Weather
-    if (weather.precip_prob > 40 && venue.tags.includes('outdoor-seating') && !venue.tags.includes('indoor')) {
-      score -= 100;
-    }
-
-    return score;
-  };
-
-  const selectedVenues: Venue[] = [];
+export const planOutingLive = async (params: PlannerParams): Promise<ItinerarySlot[]> => {
   const slots: ItinerarySlot[] = [];
-  
-  // Greedy slot selection
+  const selectedIds = new Set(params.blockedIds || []);
+  const radiusMeters = Math.round(params.rangeMiles * 1609.34);
+
+  let currentLat = params.centerLat;
+  let currentLng = params.centerLng;
+
   for (let i = 1; i <= 3; i++) {
-    const prev = selectedVenues[i-2];
-    const scored = allVenues
-      .filter(v => !selectedVenues.some(sv => sv.id === v.id))
-      .map(v => ({ venue: v, score: scoreVenue(v, i, prev?.lat, prev?.lng) }))
+    const config = (CATEGORIES_BY_SLOT as any)[i];
+    
+    // Fetch real venues for this specific slot type via Proxy
+    const pool = await PlacesProvider.searchVenues({
+      lat: currentLat,
+      lng: currentLng,
+      radiusMeters,
+      categories: config.google,
+      maxPrice: params.budget,
+      keyword: config.keywords.join(' ')
+    });
+
+    const scored = pool
+      .filter(v => !selectedIds.has(v.id))
+      .map(v => ({ venue: v, score: scoreVenue(v, i, params, currentLat, currentLng) }))
       .sort((a, b) => b.score - a.score);
 
-    const best = scored[0].venue;
-    selectedVenues.push(best);
+    if (scored.length === 0) {
+      throw new Error(`No suitable venues found for Stop ${i} in this area. Try widening your range.`);
+    }
 
-    // Simple time logic
+    const best = scored[0].venue;
+    selectedIds.add(best.id);
+
+    // Update location for next slot search to maximize path efficiency
+    currentLat = best.lat;
+    currentLng = best.lng;
+
     const startH = parseInt(params.startTime.split(':')[0]);
     const startM = parseInt(params.startTime.split(':')[1]);
     const slotStart = `${(startH + (i-1)*1.5).toString().padStart(2, '0')}:${startM.toString().padStart(2, '0')}`;
@@ -102,35 +74,64 @@ export const planOuting = (params: PlannerParams): { weather: any, slots: Itiner
     });
   }
 
-  return { weather, slots };
+  return slots;
 };
 
-export const swapSlotDeterministic = (outing: Outing, slotIdx: number, blockedIds: string[]): Venue => {
-  const allVenues = getAllVenues();
-  const prev = slotIdx > 1 ? outing.slots[slotIdx - 2].venue : undefined;
+const scoreVenue = (venue: Venue, slotIdx: number, params: PlannerParams, prevLat: number, prevLng: number): number => {
+  let score = 0;
+
+  // 1. Alcohol Preference Filtering
+  if (params.alcoholPref === AlcoholPref.NONE && venue.alcoholType === 'bar') score -= 1000;
+  if (params.alcoholPref === AlcoholPref.PREFERRED && venue.alcoholType === 'bar') score += 100;
+
+  // 2. Dietary Keyword Matching (Best effort)
+  params.dietaryTags.forEach(tag => {
+    const match = venue.name.toLowerCase().includes(tag) || 
+                  venue.tags.some(t => t.toLowerCase().includes(tag));
+    if (match) score += 50;
+  });
+
+  // 3. Proximity Scoring (Minimize commute between stops)
+  const dist = getHaversineDistance(prevLat, prevLng, venue.lat, venue.lng);
+  score -= (dist * 60); 
+
+  // 4. Quality Signals
+  score += (venue.rating * 30);
+  score += (Math.log10(venue.reviewCount + 1) * 10);
+
+  // 5. Weather Rules
+  if (params.weather.precip_prob > 30 && venue.tags.includes('outdoor')) {
+    score -= 300;
+  }
+
+  return score;
+};
+
+export const swapSlotDeterministic = async (outing: Outing, slotIdx: number, blockedIds: string[]): Promise<Venue> => {
+  const config = (CATEGORIES_BY_SLOT as any)[slotIdx];
+  const prev = slotIdx > 1 ? outing.slots[slotIdx - 2].venue : { lat: outing.center_lat, lng: outing.center_lng };
   
-  const currentId = outing.slots[slotIdx - 1].venue.id;
-  const allBlocked = [...blockedIds, currentId, ...outing.slots.map(s => s.venue.id)];
+  const pool = await PlacesProvider.searchVenues({
+    lat: prev.lat,
+    lng: prev.lng,
+    radiusMeters: Math.round(outing.range_miles * 1609.34),
+    categories: config.google,
+    maxPrice: outing.budget_level,
+    keyword: config.keywords.join(' ')
+  });
+
+  const excluded = new Set([...blockedIds, ...outing.slots.map(s => s.venue.id)]);
   
-  const scored = allVenues
-    .filter(v => !allBlocked.includes(v.id))
+  const scored = pool
+    .filter(v => !excluded.has(v.id))
     .map(v => {
-      let score = 0;
-      const validCats = (CATEGORIES_BY_SLOT as any)[slotIdx];
-      if (!v.categories.some(c => validCats.includes(c))) return { venue: v, score: -1000 };
-      
-      const distFromCenter = getHaversineDistance(DEFAULT_LAT, DEFAULT_LNG, v.lat, v.lng);
-      score += (outing.range_miles - distFromCenter) * 10;
-
-      if (prev) {
-        const stepDist = getHaversineDistance(prev.lat, prev.lng, v.lat, v.lng);
-        score -= (stepDist * 30);
-      }
-
-      score += v.rating * 15;
+      let score = v.rating * 15;
+      const dist = getHaversineDistance(prev.lat, prev.lng, v.lat, v.lng);
+      score -= (dist * 40);
       return { venue: v, score };
     })
     .sort((a, b) => b.score - a.score);
 
+  if (scored.length === 0) throw new Error("No alternatives found nearby.");
   return scored[0].venue;
 };

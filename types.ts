@@ -43,6 +43,7 @@ export interface Venue {
   lat: number;
   lng: number;
   neighborhood?: string;
+  address?: string;
   categories: string[];
   priceLevel: number;
   rating: number;
@@ -71,9 +72,10 @@ export interface Outing {
   id: string;
   created_at: string;
   date: string; // YYYY-MM-DD
+  location_query: string;
   location_mode: LocationMode;
-  center_lat?: number;
-  center_lng?: number;
+  center_lat: number;
+  center_lng: number;
   vibe: Vibe;
   budget_level: BudgetLevel;
   dietary_tags: DietaryTag[];

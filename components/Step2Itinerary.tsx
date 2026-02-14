@@ -59,8 +59,8 @@ const Step2Itinerary: React.FC<Step2Props> = ({ outing, setOuting, onFinalize })
         const nextBlocked = [...blockedIds, venueToBlock];
         setBlockedIds(nextBlocked);
         localStorage.setItem('blocked_venues', JSON.stringify(nextBlocked));
-        // Auto swap since it's blocked
-        const newVenue = swapSlotDeterministic(outing, slotIndex, nextBlocked);
+        // Auto swap since it's blocked. Added await because swapSlotDeterministic is async.
+        const newVenue = await swapSlotDeterministic(outing, slotIndex, nextBlocked);
         const newSlots = outing.slots.map(s => 
           s.slot_index === slotIndex ? { ...s, venue: newVenue, status: 'blocked' as const } : s
         );
@@ -76,11 +76,13 @@ const Step2Itinerary: React.FC<Step2Props> = ({ outing, setOuting, onFinalize })
     }
   };
 
-  const executeSwap = (reason: string) => {
+  // Made executeSwap async to handle await for swapSlotDeterministic
+  const executeSwap = async (reason: string) => {
     if (pendingSwapSlot === null) return;
     
     setSwappingId(pendingSwapSlot);
-    const newVenue = swapSlotDeterministic(outing, pendingSwapSlot, blockedIds);
+    // Added await because swapSlotDeterministic is async.
+    const newVenue = await swapSlotDeterministic(outing, pendingSwapSlot, blockedIds);
     const newSlots = outing.slots.map(s => 
       s.slot_index === pendingSwapSlot ? { ...s, venue: newVenue, status: 'swapped' as const } : s
     );

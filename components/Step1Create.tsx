@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import TactileButton from './TactileButton';
 import { Vibe, BudgetLevel, AlcoholPref, LocationMode, Outing, DietaryTag } from '../types';
-import { Clock, Calendar as CalendarIcon, MapPin, SlidersHorizontal } from 'lucide-react';
+import { Clock, Calendar as CalendarIcon, MapPin, SlidersHorizontal, Search } from 'lucide-react';
 
 interface Step1Props {
   onGenerate: (params: Partial<Outing>) => void;
@@ -10,6 +10,7 @@ interface Step1Props {
 }
 
 const Step1Create: React.FC<Step1Props> = ({ onGenerate, isLoading }) => {
+  const [location, setLocation] = useState("");
   const [vibe, setVibe] = useState<Vibe>(Vibe.COZY);
   const [budget, setBudget] = useState<BudgetLevel>(BudgetLevel.MODERATE);
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -24,7 +25,12 @@ const Step1Create: React.FC<Step1Props> = ({ onGenerate, isLoading }) => {
   };
 
   const handleGenerate = () => {
+    if (!location) {
+      alert("Please enter a location (ZIP or City).");
+      return;
+    }
     onGenerate({ 
+      location_query: location,
       vibe, 
       budget_level: budget, 
       date,
@@ -43,10 +49,24 @@ const Step1Create: React.FC<Step1Props> = ({ onGenerate, isLoading }) => {
     <div className="py-8 space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div className="space-y-2">
         <h2 className="text-3xl font-bold text-white tracking-tight">Plan Outing</h2>
-        <p className="text-slate-400 text-sm">Deterministic itinerary generator for local rendezvous.</p>
+        <p className="text-slate-400 text-sm">Real-time local itinerary engine.</p>
       </div>
       
       <div className="space-y-8">
+        <div className={sectionClass}>
+          <h3 className={labelClass}>Location</h3>
+          <div className="relative">
+            <input 
+              type="text" 
+              placeholder="ZIP, City, or Neighborhood..."
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              className="w-full bg-white/5 border border-white/10 rounded-xl py-4 px-12 text-sm font-medium text-white outline-none focus:border-white/20 transition-all"
+            />
+            <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+          </div>
+        </div>
+
         <div className={sectionClass}>
           <h3 className={labelClass}>Time & Date</h3>
           <div className="grid grid-cols-2 gap-3">
@@ -106,14 +126,15 @@ const Step1Create: React.FC<Step1Props> = ({ onGenerate, isLoading }) => {
 
         <div className={sectionClass}>
           <div className="flex justify-between items-center">
-            <h3 className={labelClass}>Range (Miles)</h3>
+            <h3 className={labelClass}>Search Radius</h3>
             <span className="text-xs font-bold text-white">{range}mi</span>
           </div>
           <input 
             type="range" 
-            min="1" max="25" 
+            min="1" max="15" 
+            step="0.5"
             value={range} 
-            onChange={(e) => setRange(parseInt(e.target.value))}
+            onChange={(e) => setRange(parseFloat(e.target.value))}
             className="w-full accent-white h-1 bg-white/10 rounded-lg appearance-none cursor-pointer"
           />
         </div>
@@ -158,7 +179,7 @@ const Step1Create: React.FC<Step1Props> = ({ onGenerate, isLoading }) => {
             disabled={isLoading}
             className="w-full py-4 bg-white text-black rounded-xl font-bold text-xs tracking-[0.2em] shadow-2xl disabled:opacity-20 transition-all hover:bg-slate-100"
           >
-            {isLoading ? "CALCULATING..." : "BUILD ITINERARY"}
+            {isLoading ? "CALCULATING LOCAL SPOTS..." : "BUILD ITINERARY"}
           </TactileButton>
         </div>
       </div>
