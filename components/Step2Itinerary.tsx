@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
-import { Plus, Calendar, MapPin } from 'lucide-react';
+import { Plus, Calendar, MapPin, MessageSquare } from 'lucide-react';
 import { Outing, ItinerarySlot, Venue } from '../types';
 import { swapSlotDeterministic } from '../services/planner';
 import ItineraryCard from './ItineraryCard';
@@ -13,9 +13,19 @@ interface Step2Props {
   onFinalize: () => void;
 }
 
+const SWAP_REASONS = [
+  "Too far",
+  "Too expensive",
+  "Too loud",
+  "Not my vibe",
+  "Already been",
+  "Dietary mismatch"
+];
+
 const Step2Itinerary: React.FC<Step2Props> = ({ outing, setOuting, onFinalize }) => {
   const [swappingId, setSwappingId] = useState<number | null>(null);
   const [blockedIds, setBlockedIds] = useState<string[]>([]);
+  const [pendingSwapSlot, setPendingSwapSlot] = useState<number | null>(null);
 
   useEffect(() => {
     const saved = localStorage.getItem('blocked_venues');
@@ -40,14 +50,7 @@ const Step2Itinerary: React.FC<Step2Props> = ({ outing, setOuting, onFinalize })
     }
 
     if (action === 'swap') {
-      setSwappingId(slotIndex);
-      // Deterministic swap
-      const newVenue = swapSlotDeterministic(outing, slotIndex, blockedIds);
-      const newSlots = outing.slots.map(s => 
-        s.slot_index === slotIndex ? { ...s, venue: newVenue, status: 'swapped' as const } : s
-      );
-      setOuting({ ...outing, slots: newSlots });
-      setSwappingId(null);
+      setPendingSwapSlot(slotIndex);
     } 
     
     if (action === 'block') {
@@ -71,6 +74,22 @@ const Step2Itinerary: React.FC<Step2Props> = ({ outing, setOuting, onFinalize })
       );
       setOuting({ ...outing, slots: newSlots });
     }
+  };
+
+  const executeSwap = (reason: string) => {
+    if (pendingSwapSlot === null) return;
+    
+    setSwappingId(pendingSwapSlot);
+    const newVenue = swapSlotDeterministic(outing, pendingSwapSlot, blockedIds);
+    const newSlots = outing.slots.map(s => 
+      s.slot_index === pendingSwapSlot ? { ...s, venue: newVenue, status: 'swapped' as const } : s
+    );
+    setOuting({ ...outing, slots: newSlots });
+    setSwappingId(null);
+    setPendingSwapSlot(null);
+    
+    // In a real app, we'd log the 'reason' to improve the deterministic engine.
+    console.debug(`Swapped slot ${pendingSwapSlot} because: ${reason}`);
   };
 
   const onReorder = (newSlots: ItinerarySlot[]) => {
@@ -127,6 +146,41 @@ const Step2Itinerary: React.FC<Step2Props> = ({ outing, setOuting, onFinalize })
           </AnimatePresence>
         </Reorder.Group>
       </div>
+
+      <AnimatePresence>
+        {pendingSwapSlot !== null && (
+          <div className="fixed inset-0 z-[100] flex items-end justify-center px-6 pb-12 bg-black/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ y: 100, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 100, opacity: 0 }}
+              className="w-full max-w-sm bg-[#1A1A1A] rounded-3xl border border-white/10 p-6 space-y-6 shadow-2xl"
+            >
+              <div className="space-y-1">
+                <h3 className="text-lg font-bold text-white">Why the swap?</h3>
+                <p className="text-xs text-slate-500">Your feedback helps tune the suggestions.</p>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {SWAP_REASONS.map(reason => (
+                  <button 
+                    key={reason}
+                    onClick={() => executeSwap(reason)}
+                    className="py-3 px-4 rounded-xl bg-white/5 border border-white/5 text-[10px] font-bold text-slate-400 hover:text-white hover:bg-white/10 transition-all text-left"
+                  >
+                    {reason}
+                  </button>
+                ))}
+              </div>
+              <button 
+                onClick={() => setPendingSwapSlot(null)}
+                className="w-full py-3 text-[10px] font-bold text-slate-600 uppercase tracking-widest hover:text-slate-400"
+              >
+                Never mind
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       <div className="fixed bottom-24 left-6 right-6 z-50">
         <TactileButton

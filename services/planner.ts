@@ -41,33 +41,33 @@ export const planOuting = (params: PlannerParams): { weather: any, slots: Itiner
 
     // 2. Alcohol Preference
     if (params.alcoholPref === AlcoholPref.NONE && venue.alcoholType === 'bar') return -500;
-    if (params.alcoholPref === AlcoholPref.PREFERRED && venue.alcoholType === 'bar') score += 20;
+    if (params.alcoholPref === AlcoholPref.PREFERRED && venue.alcoholType === 'bar') score += 30;
 
     // 3. Dietary Support
     const missingDiet = params.dietaryTags.filter(tag => !venue.dietarySupport.includes(tag));
-    score -= (missingDiet.length * 50);
+    score -= (missingDiet.length * 60);
 
-    // 4. Budget Match
+    // 4. Budget Match (Strong weighting)
     const budgetDiff = Math.abs(venue.priceLevel - params.budget);
-    score -= (budgetDiff * 30);
+    score -= (budgetDiff * 50);
 
-    // 5. Distance
-    const dist = getHaversineDistance(centerLat, centerLng, venue.lat, venue.lng);
-    if (dist > params.range) return -200;
-    score += (10 - dist) * 5; // Preference for closer to center
+    // 5. Distance (Strong weighting)
+    const distFromCenter = getHaversineDistance(centerLat, centerLng, venue.lat, venue.lng);
+    if (distFromCenter > params.range) return -200;
+    score += (params.range - distFromCenter) * 10; 
 
     if (prevLat && prevLng) {
       const stepDist = getHaversineDistance(prevLat, prevLng, venue.lat, venue.lng);
-      score -= (stepDist * 15); // Preference for closeness between steps
+      score -= (stepDist * 30); // Heavy penalty for large jumps between stops
     }
 
     // 6. Quality
-    score += (venue.rating * 10);
-    score += (Math.log10(venue.reviewCount) * 5);
+    score += (venue.rating * 15);
+    score += (Math.log10(venue.reviewCount || 1) * 5);
 
     // 7. Weather
     if (weather.precip_prob > 40 && venue.tags.includes('outdoor-seating') && !venue.tags.includes('indoor')) {
-      score -= 40;
+      score -= 100;
     }
 
     return score;
@@ -108,24 +108,10 @@ export const planOuting = (params: PlannerParams): { weather: any, slots: Itiner
 export const swapSlotDeterministic = (outing: Outing, slotIdx: number, blockedIds: string[]): Venue => {
   const allVenues = getAllVenues();
   const prev = slotIdx > 1 ? outing.slots[slotIdx - 2].venue : undefined;
-  const next = slotIdx < 3 ? outing.slots[slotIdx].venue : undefined;
-
+  
   const currentId = outing.slots[slotIdx - 1].venue.id;
   const allBlocked = [...blockedIds, currentId, ...outing.slots.map(s => s.venue.id)];
   
-  // Reuse same logic but filter out current
-  const plannerParams: PlannerParams = {
-    date: outing.date,
-    vibe: outing.vibe,
-    budget: outing.budget_level,
-    alcoholPref: outing.alcohol_pref,
-    dietaryTags: outing.dietary_tags,
-    range: outing.range_miles,
-    startTime: outing.start_time,
-    blockedIds: allBlocked
-  };
-
-  // Internal simplified scoring for the swap
   const scored = allVenues
     .filter(v => !allBlocked.includes(v.id))
     .map(v => {
@@ -133,9 +119,15 @@ export const swapSlotDeterministic = (outing: Outing, slotIdx: number, blockedId
       const validCats = (CATEGORIES_BY_SLOT as any)[slotIdx];
       if (!v.categories.some(c => validCats.includes(c))) return { venue: v, score: -1000 };
       
-      const dist = getHaversineDistance(DEFAULT_LAT, DEFAULT_LNG, v.lat, v.lng);
-      score += (10 - dist) * 2;
-      score += v.rating * 10;
+      const distFromCenter = getHaversineDistance(DEFAULT_LAT, DEFAULT_LNG, v.lat, v.lng);
+      score += (outing.range_miles - distFromCenter) * 10;
+
+      if (prev) {
+        const stepDist = getHaversineDistance(prev.lat, prev.lng, v.lat, v.lng);
+        score -= (stepDist * 30);
+      }
+
+      score += v.rating * 15;
       return { venue: v, score };
     })
     .sort((a, b) => b.score - a.score);
