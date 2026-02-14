@@ -28,19 +28,35 @@ export enum LocationMode {
   CUSTOM = 'custom'
 }
 
+export enum DietaryTag {
+  VEGAN = 'vegan',
+  VEGETARIAN = 'vegetarian',
+  GLUTEN_FREE = 'gluten-free',
+  DAIRY_FREE = 'dairy-free',
+  HALAL = 'halal',
+  KOSHER = 'kosher'
+}
+
 export interface Venue {
-  place_id: string;
+  id: string;
   name: string;
-  rating: number;
-  user_ratings_total: number;
-  price_level: number;
-  address: string;
-  short_description: string;
+  lat: number;
+  lng: number;
+  neighborhood?: string;
   categories: string[];
-  imageUrl: string;
-  mapsUrl: string;
-  open_time: string; // HH:MM
-  close_time: string; // HH:MM
+  priceLevel: number;
+  rating: number;
+  reviewCount: number;
+  tags: string[];
+  alcoholType: 'none' | 'optional' | 'bar';
+  dietarySupport: string[];
+  hours: {
+    openMorning: boolean;
+    openEvening: boolean;
+    openLate: boolean;
+  };
+  imageUrl?: string;
+  mapsUrl?: string;
 }
 
 export interface ItinerarySlot {
@@ -56,12 +72,16 @@ export interface Outing {
   created_at: string;
   date: string; // YYYY-MM-DD
   location_mode: LocationMode;
+  center_lat?: number;
+  center_lng?: number;
   vibe: Vibe;
   budget_level: BudgetLevel;
-  dietary_tags: string[];
+  dietary_tags: DietaryTag[];
   alcohol_pref: AlcoholPref;
-  start_datetime: string; // This is actually HH:MM start
-  end_datetime?: string; // This is actually HH:MM end
+  range_miles: number;
+  indoor_outdoor: 'indoor' | 'outdoor' | 'either';
+  start_time: string;
+  end_time?: string;
   slots: ItinerarySlot[];
   weather_snapshot?: {
     temp: number;

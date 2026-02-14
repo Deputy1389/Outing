@@ -9,7 +9,7 @@ import Step3Final from './components/Step3Final';
 import History from './components/History';
 import Onboarding from './components/Onboarding';
 import Membership from './components/Membership';
-import { generateOuting } from './services/gemini';
+import { planOuting } from './services/planner';
 
 const App: React.FC = () => {
   const [view, setView] = useState<AppView>('create');
@@ -47,29 +47,42 @@ const App: React.FC = () => {
 
   const handleGenerate = async (params: Partial<Outing>) => {
     setIsLoading(true);
-    try {
-      const { weather, slots } = await generateOuting(params);
-      const newOuting: Outing = {
-        id: crypto.randomUUID(),
-        created_at: new Date().toISOString(),
-        date: params.date || new Date().toISOString().split('T')[0],
-        location_mode: params.location_mode!,
-        vibe: params.vibe!,
-        budget_level: params.budget_level!,
-        dietary_tags: params.dietary_tags || [],
-        alcohol_pref: params.alcohol_pref!,
-        start_datetime: params.start_datetime!,
-        end_datetime: params.end_datetime,
-        slots: slots.map(s => ({ ...s, status: 'kept' })),
-        weather_snapshot: weather,
-      };
-      setCurrentOuting(newOuting);
-      setView('itinerary');
-    } catch (error) {
-      console.error("Generation error:", error);
-    } finally {
-      setIsLoading(false);
-    }
+    // Simulate slight delay for "calculating" feel
+    setTimeout(() => {
+      try {
+        const { weather, slots } = planOuting({
+          date: params.date || new Date().toISOString().split('T')[0],
+          vibe: params.vibe!,
+          budget: params.budget_level!,
+          alcoholPref: params.alcohol_pref!,
+          dietaryTags: params.dietary_tags!,
+          range: params.range_miles!,
+          startTime: params.start_time!
+        });
+
+        const newOuting: Outing = {
+          id: crypto.randomUUID(),
+          created_at: new Date().toISOString(),
+          date: params.date!,
+          location_mode: params.location_mode!,
+          vibe: params.vibe!,
+          budget_level: params.budget_level!,
+          dietary_tags: params.dietary_tags!,
+          alcohol_pref: params.alcohol_pref!,
+          range_miles: params.range_miles!,
+          indoor_outdoor: params.indoor_outdoor!,
+          start_time: params.start_time!,
+          slots,
+          weather_snapshot: weather,
+        };
+        setCurrentOuting(newOuting);
+        setView('itinerary');
+      } catch (error) {
+        console.error("Generation error:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    }, 800);
   };
 
   const handleFinalize = () => {
@@ -107,17 +120,13 @@ const App: React.FC = () => {
           <AnimatePresence mode="wait">
             <motion.div
               key={view}
-              initial={{ opacity: 0, x: 20 }}
+              initial={{ opacity: 0, x: 10 }}
               animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              exit={{ opacity: 0, x: -10 }}
+              transition={{ duration: 0.2 }}
             >
               {view === 'create' && (
-                <Step1Create 
-                  onGenerate={handleGenerate} 
-                  isLoading={isLoading}
-                  onUpgrade={() => setView('membership')}
-                />
+                <Step1Create onGenerate={handleGenerate} isLoading={isLoading} />
               )}
               {view === 'itinerary' && currentOuting && (
                 <Step2Itinerary 

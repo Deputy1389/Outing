@@ -20,7 +20,8 @@ const TactileButton: React.FC<TactileButtonProps> = ({ children, onClick, classN
     <motion.button
       whileTap={{ scale: 0.96 }}
       transition={{ type: "spring", stiffness: 400, damping: 25 }}
-      onPressStart={triggerHaptic}
+      /* Fix: 'onPressStart' does not exist on HTMLMotionProps<"button">. Using onPointerDown instead for haptic trigger. */
+      onPointerDown={triggerHaptic}
       onClick={onClick}
       disabled={disabled}
       className={className}

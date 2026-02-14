@@ -51,19 +51,22 @@ const Step3Final: React.FC<Step3Props> = ({ outing }) => {
            </svg>
         </div>
         <h2 className="text-3xl font-serif text-white">It's a date!</h2>
-        <p className="text-slate-500 px-8 text-sm">Your plan is ready. Everything starts at {formatTime(outing.start_datetime)}.</p>
+        {/* Fix: Property 'start_datetime' does not exist on type 'Outing'. Did you mean 'start_time'? */}
+        <p className="text-slate-500 px-8 text-sm">Your plan is ready. Everything starts at {formatTime(outing.start_time)}.</p>
       </div>
 
       <div className="space-y-6 text-left pt-4">
         {outing.slots.map((slot, idx) => (
-          <div key={`${slot.venue.place_id}-${idx}`} className="relative pl-10 border-l-2 border-white/5 ml-4 pb-8 last:pb-0">
+          /* Fix: Property 'place_id' does not exist on type 'Venue'. Using 'id' instead. */
+          <div key={`${slot.venue.id}-${idx}`} className="relative pl-10 border-l-2 border-white/5 ml-4 pb-8 last:pb-0">
             <div className="absolute left-[-9px] top-0 w-4 h-4 rounded-full bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
             <div className="space-y-1">
               <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">
                 {formatTime(slot.start_time)} — {formatTime(slot.end_time)}
               </span>
               <h4 className="font-bold text-white text-lg">{slot.venue.name}</h4>
-              <p className="text-xs text-slate-500 line-clamp-2 italic">"{slot.venue.short_description}"</p>
+              {/* Fix: Property 'short_description' does not exist on type 'Venue'. Removed or replaced with fallback. */}
+              <p className="text-xs text-slate-500 line-clamp-2 italic">{slot.venue.categories.join(', ')}</p>
               <div className="pt-2">
                 <a 
                   href={slot.venue.mapsUrl} 

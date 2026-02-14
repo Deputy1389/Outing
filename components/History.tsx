@@ -48,13 +48,15 @@ const History: React.FC<HistoryProps> = ({ history, onSelect }) => {
               </h4>
               <div className="flex items-center gap-2 text-slate-500">
                 <Clock size={12} />
-                <span className="text-[10px] font-medium uppercase tracking-widest">{outing.start_datetime} Start</span>
+                {/* Fix: Property 'start_datetime' does not exist on type 'Outing'. Did you mean 'start_time'? */}
+                <span className="text-[10px] font-medium uppercase tracking-widest">{outing.start_time} Start</span>
               </div>
             </div>
 
             <div className="flex items-center flex-wrap gap-x-2 gap-y-1 pt-2 border-t border-white/5">
               {outing.slots.map((s, i) => (
-                <React.Fragment key={`${s.venue.place_id}-${i}`}>
+                /* Fix: Property 'place_id' does not exist on type 'Venue'. Using 'id' instead. */
+                <React.Fragment key={`${s.venue.id}-${i}`}>
                   <span className="text-[10px] text-slate-400 font-medium truncate max-w-[100px]">
                     {s.venue.name}
                   </span>
