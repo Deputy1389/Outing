@@ -1,0 +1,7 @@
+{
+  "name": "Outing - The Smart Date Planner",
+  "description": "A weather-aware, structured date itinerary planner that generates personalized 3-stop outings based on vibe, budget, and dietary preferences.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
